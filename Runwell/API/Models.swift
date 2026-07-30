@@ -9,7 +9,7 @@ struct Company: Identifiable, Decodable, Hashable {
     enum CodingKeys: String, CodingKey { case id, cid, name, product, icon }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? c.decode(String.self, forKey: .id)) ?? (try c.decode(String.self, forKey: .cid))
+        id = (try? c.decode(String.self, forKey: .id)) ?? (try? c.decode(String.self, forKey: .cid)) ?? ""
         name = (try? c.decode(String.self, forKey: .name)) ?? id
         product = try? c.decode(String.self, forKey: .product)
         icon = try? c.decode(String.self, forKey: .icon)
@@ -25,7 +25,7 @@ struct Agent: Identifiable, Decodable, Hashable {
     enum CodingKeys: String, CodingKey { case id, aid, name, role, is_ceo }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? c.decode(String.self, forKey: .id)) ?? (try c.decode(String.self, forKey: .aid))
+        id = (try? c.decode(String.self, forKey: .id)) ?? (try? c.decode(String.self, forKey: .aid)) ?? ""
         name = (try? c.decode(String.self, forKey: .name)) ?? id
         role = try? c.decode(String.self, forKey: .role)
         isCeo = try? c.decode(Bool.self, forKey: .is_ceo)
