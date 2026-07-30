@@ -1,0 +1,34 @@
+name: Runwell
+options:
+  bundleIdPrefix: so.runwell
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: Z3FSAXK2G4
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  Runwell:
+    type: application
+    platform: iOS
+    sources:
+      - Runwell
+    info:
+      path: Runwell/Info.plist
+      properties:
+        CFBundleDisplayName: Runwell
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSFaceIDUsageDescription: Use Face ID to unlock Runwell.
+        UIUserInterfaceStyle: Dark
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.runwell.app
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
