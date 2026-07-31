@@ -7,7 +7,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"
     DEVELOPMENT_TEAM: Z3FSAXK2G4
     SWIFT_VERSION: "5.9"
     TARGETED_DEVICE_FAMILY: "1"
@@ -23,8 +23,14 @@ targets:
         CFBundleDisplayName: Runwell
         UILaunchScreen:
           UIColorName: LaunchBackground
+        UIRequiresFullScreen: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSFaceIDUsageDescription: Use Face ID to unlock Runwell.
         UIUserInterfaceStyle: Dark
     settings:
