@@ -1,0 +1,131 @@
+name: TestFlight — invite tester
+
+# Adds a beta tester to TestFlight using the App Store Connect API key that is
+# ALREADY stored as a repo secret. The .p8 never leaves GitHub and is never
+# printed — it is only used to sign a short-lived JWT inside the runner.
+#
+# Run it:  gh workflow run "TestFlight — invite tester" -f email=someone@example.com
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: Tester email address
+        required: true
+      first_name:
+        description: First name
+        required: false
+        default: ''
+      last_name:
+        description: Last name
+        required: false
+        default: ''
+
+jobs:
+  invite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install deps
+        run: pip install --quiet pyjwt cryptography requests
+
+      - name: Add tester to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          EMAIL: ${{ github.event.inputs.email }}
+          FIRST: ${{ github.event.inputs.first_name }}
+          LAST: ${{ github.event.inputs.last_name }}
+          BUNDLE_ID: so.runwell.app
+        run: |
+          python - <<'PY'
+          import os, time, base64, json, jwt, requests
+
+          key_id   = os.environ['ASC_KEY_ID'].strip()
+          issuer   = os.environ['ASC_ISSUER_ID'].strip()
+          p8       = base64.b64decode(os.environ['ASC_KEY_P8_BASE64']).decode()
+          email    = os.environ['EMAIL'].strip()
+          first    = (os.environ.get('FIRST') or '').strip() or 'Beta'
+          last     = (os.environ.get('LAST') or '').strip() or 'Tester'
+          bundle   = os.environ['BUNDLE_ID']
+
+          tok = jwt.encode(
+              {'iss': issuer, 'iat': int(time.time()), 'exp': int(time.time()) + 1200,
+               'aud': 'appstoreconnect-v1'},
+              p8, algorithm='ES256', headers={'kid': key_id, 'typ': 'JWT'})
+          H = {'Authorization': f'Bearer {tok}', 'Content-Type': 'application/json'}
+          API = 'https://api.appstoreconnect.apple.com/v1'
+
+          def show(r):
+              try: return json.dumps(r.json(), indent=1)[:1200]
+              except Exception: return r.text[:600]
+
+          # 1. find the app
+          r = requests.get(f'{API}/apps', headers=H, params={'filter[bundleId]': bundle}, timeout=45)
+          print('apps ->', r.status_code)
+          if r.status_code != 200:
+              print(show(r)); raise SystemExit('could not list apps')
+          apps = r.json().get('data', [])
+          if not apps:
+              raise SystemExit(f'no app found for bundle id {bundle}')
+          app_id = apps[0]['id']
+          print('app:', apps[0]['attributes'].get('name'), app_id)
+
+          # 2. builds present? (external testers can only install a build that
+          #    has passed Beta App Review — report, do not fail)
+          rb = requests.get(f'{API}/builds', headers=H,
+                            params={'filter[app]': app_id, 'limit': 5}, timeout=45)
+          builds = rb.json().get('data', []) if rb.status_code == 200 else []
+          print('builds visible:', len(builds))
+          for b in builds[:3]:
+              a = b['attributes']
+              print('   build', a.get('version'), 'uploaded', a.get('uploadedDate'),
+                    'state', a.get('processingState'))
+
+          # 3. pick a beta group (prefer an EXTERNAL one for a public email)
+          rg = requests.get(f'{API}/apps/{app_id}/betaGroups', headers=H, timeout=45)
+          groups = rg.json().get('data', []) if rg.status_code == 200 else []
+          print('beta groups:', [(g['attributes'].get('name'),
+                                  'internal' if g['attributes'].get('isInternalGroup') else 'external')
+                                 for g in groups])
+          ext = [g for g in groups if not g['attributes'].get('isInternalGroup')]
+          if ext:
+              group = ext[0]
+          elif groups:
+              group = groups[0]
+          else:
+              print('no beta group exists — creating an external group "Beta Testers"')
+              rc = requests.post(f'{API}/betaGroups', headers=H, timeout=45, json={
+                  'data': {'type': 'betaGroups',
+                           'attributes': {'name': 'Beta Testers', 'publicLinkEnabled': False},
+                           'relationships': {'app': {'data': {'type': 'apps', 'id': app_id}}}}})
+              print('create group ->', rc.status_code)
+              if rc.status_code not in (200, 201):
+                  print(show(rc)); raise SystemExit('could not create a beta group')
+              group = rc.json()['data']
+          gid, gname = group['id'], group['attributes'].get('name')
+          print('using group:', gname, gid)
+
+          # 4. already a tester?
+          rt = requests.get(f'{API}/betaTesters', headers=H,
+                            params={'filter[email]': email}, timeout=45)
+          existing = rt.json().get('data', []) if rt.status_code == 200 else []
+          if existing:
+              tid = existing[0]['id']
+              print('tester already exists:', tid, '- adding to group', gname)
+              ra = requests.post(f'{API}/betaGroups/{gid}/relationships/betaTesters', headers=H,
+                                 timeout=45, json={'data': [{'type': 'betaTesters', 'id': tid}]})
+              print('add to group ->', ra.status_code)
+              if ra.status_code not in (204, 200, 201):
+                  print(show(ra)); raise SystemExit('could not add existing tester to the group')
+              print('RESULT: %s is now in "%s"' % (email, gname))
+          else:
+              rn = requests.post(f'{API}/betaTesters', headers=H, timeout=45, json={
+                  'data': {'type': 'betaTesters',
+                           'attributes': {'email': email, 'firstName': first, 'lastName': last},
+                           'relationships': {'betaGroups': {'data': [{'type': 'betaGroups', 'id': gid}]}}}})
+              print('create tester ->', rn.status_code)
+              if rn.status_code not in (200, 201):
+                  print(show(rn)); raise SystemExit('could not create the tester')
+              print('RESULT: invited %s to "%s"' % (email, gname))
+          PY
