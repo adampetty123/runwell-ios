@@ -88,13 +88,15 @@ jobs:
           print('beta groups:', [(g['attributes'].get('name'),
                                   'internal' if g['attributes'].get('isInternalGroup') else 'external')
                                  for g in groups])
+          # An INTERNAL group only accepts people who are already users on the
+          # App Store Connect account, so an ordinary email address 409s against
+          # it ("Tester(s) cannot be assigned"). A public email needs an EXTERNAL
+          # group, so make one if the app has none.
           ext = [g for g in groups if not g['attributes'].get('isInternalGroup')]
           if ext:
               group = ext[0]
-          elif groups:
-              group = groups[0]
           else:
-              print('no beta group exists — creating an external group "Beta Testers"')
+              print('no EXTERNAL group exists — creating one ("Beta Testers")')
               rc = requests.post(f'{API}/betaGroups', headers=H, timeout=45, json={
                   'data': {'type': 'betaGroups',
                            'attributes': {'name': 'Beta Testers', 'publicLinkEnabled': False},
@@ -128,4 +130,15 @@ jobs:
               if rn.status_code not in (200, 201):
                   print(show(rn)); raise SystemExit('could not create the tester')
               print('RESULT: invited %s to "%s"' % (email, gname))
+
+          # External testers can only INSTALL once a build has passed Beta App
+          # Review, so say plainly whether that has happened.
+          if builds:
+              bid = builds[0]['id']
+              rr = requests.get(f'{API}/builds/{bid}/betaAppReviewSubmission', headers=H, timeout=45)
+              if rr.status_code == 200 and rr.json().get('data'):
+                  print('beta app review state:', rr.json()['data']['attributes'].get('betaReviewState'))
+              else:
+                  print('BETA APP REVIEW: the latest build has NOT been submitted for external review '
+                        '- the tester is invited but cannot install until it is submitted and approved.')
           PY
